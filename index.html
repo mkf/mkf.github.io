@@ -1,0 +1,308 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>A slider-chart table editor by Mika Feiler, 2022</title>
+</head>
+
+<div id="paragraphs">
+<button onClick="hideParagraphs()">Hide these paragraphs!</button>
+  <script>
+    function hideParagraphs() {
+      document.getElementById("paragraphs").style.display = "none";
+    }
+  </script>
+<p>The below table editor allows creating slider-chart tables. Explore.</p>
+<p>These paragraphs are not included in the generated HTML, only the <code>div</code> is.</p>
+</div>
+
+<div id="whole">
+  <style>
+    button.proper {
+      display: block;
+      margin: 1ex;
+    }
+
+    button#disableeditor,
+    button#appendrow {
+      display: none;
+    }
+
+    input[type=number] {
+      width: 3em;
+    }
+  </style>
+  <table cellspacing="2" cellpadding="2" border="1">
+    <tbody id="trs">
+      <tr id="header">
+        <th id="name">Name</th>
+      </tr>
+    </tbody>
+  </table>
+  <button class="proper" id="enableeditor" onclick="enableEditor()">Click here to edit this table to create your own!</button>
+  <button id="appendrow" onclick="appendRow()">Append row</button>
+  <button class="proper" id="disableeditor" onclick="disableEditor()">Disable Editor</button>
+  <div id="gibarea" style="display: none;">
+    <button class="proper" id="gib" onclick="gib()">Gib html below</button>
+    <textarea id="gibhere" disabled cols="40" rows="30"></textarea>
+    <button class="proper" id="ctc" onclick="copyToClipboard()">Copy to clipboard!</button>
+    <label for="filename">Filename for download: </label>
+    <input type="text" id="filename" value="mojaTabelka.html">
+    <button class="proper" id="download" onclick="downloadThisText()">Download as ^filename!</button>
+  </div>
+  <!-- <pre></pre> -->
+  <!-- for inclusion in giben html, have the js in the below <script> tag. -->
+  <!-- for nicer editing in codepen, have the js in its JS tab. -->
+  <script>
+    function copyToClipboard() {
+      document.getElementById("gibhere").select();
+      document.execCommand("copy");
+    }
+
+    function downloadThisText() {
+      let filename = document.getElementById("filename").value;
+      let text = document.getElementById("gibhere").value;
+      // as per https://www.c-sharpcorner.com/article/copy-and-download-value-from-textarea-using-javascript/
+      let link = document.createElement("a");
+      sha256_this_text(text, filename, link);
+      link.setAttribute(
+        'href',
+        'data:text/html;charset=utf-8, ' +
+        encodeURIComponent(text)
+      );
+      link.setAttribute('download', filename);
+      link.textContent = filename;
+      document.body.appendChild(link);
+      document.body.appendChild(document.createElement("br"));
+      link.click();
+      link.textContent = filename + sha256_this_text(text);
+    }
+    async function sha256_this_text(text, filename, link) {
+      // as per https://stackoverflow.com/q/59777670/4240261
+      const utf8encode = new TextEncoder('utf-8').encode(text);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', utf8encode);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => ('00' + b.toString(16)).slice(-2)).join('');
+      link.textContent = filename + " " + hashHex;
+    }
+
+    function thetextelements() {
+      return Array.from(document.getElementById("header").children)
+        .map((e) => ({
+          t: "header",
+          e: e
+        }))
+        .concat(
+          Array.from(document.getElementById("trs").children)
+          .slice(1)
+          .map((x) => x.children[0])
+          .map((e) => ({
+            t: "name",
+            e: e
+          }))
+        );
+    }
+
+    function theRangeElements() {
+      let trs = Array.from(document.getElementById("trs").children).slice(1);
+      let tds = trs.flatMap((tr) => Array.from(tr.children).slice(1));
+      return tds.map((td) => td.children[0]);
+    }
+
+    function newTd() {
+      let new_td = document.createElement("td");
+      let range = document.createElement("input");
+      range.type = "range";
+      range.value = 50;
+      new_td.appendChild(range);
+      numberFieldEnabler(range);
+      return new_td;
+    }
+
+    function addHandlerFactory(thingt) {
+      return (e) => {
+        let element = e.target.parentNode;
+        switch (thingt) {
+          case "header":
+            console.log("head");
+            let newNode = document.createElement("th");
+            newNode.innerHTML =
+              "<input type=text disabled><button>&gt;</button><button>x</button>";
+            element.parentNode.insertBefore(newNode, element.nextSibling);
+            let index = Array.from(element.parentNode.children).indexOf(newNode);
+            let trs = Array.from(document.getElementById("trs").children);
+            // trs[0].
+            trs.slice(1).forEach((tr) => {
+              let post_td = tr.children[index];
+              let new_td = newTd();
+              tr.insertBefore(new_td, post_td);
+            });
+            newNode.children[1].addEventListener(
+              "click",
+              addHandlerFactory("header")
+            );
+            newNode.children[2].addEventListener(
+              "click",
+              removeHandlerFactory("header")
+            );
+            newNode.children[0].disabled = false;
+            break;
+          case "name":
+            console.log("name");
+            appendRow(element.parentNode);
+            break;
+        }
+      };
+    }
+
+    function appendRow(before) {
+      let e = document.createElement("tr");
+      let nameE = document.createElement("td");
+      nameE.innerHTML =
+        "<input type=text disabled><button>^</button><button>x</button>";
+      nameE.children[1].addEventListener("click", addHandlerFactory("name"));
+      nameE.children[2].addEventListener("click", removeHandlerFactory("name"));
+      e.appendChild(nameE);
+      Array.from(document.getElementById("header").children)
+        .slice(1)
+        .forEach(function(x) {
+          e.appendChild(newTd());
+        });
+      let trs_elem = document.getElementById("trs");
+      if (before == null) trs_elem.appendChild(e);
+      else trs_elem.insertBefore(e, before);
+      nameE.children[0].disabled = false;
+    }
+    let theZeroStyleSheet = document.styleSheets[0];
+    var ruleIndexInZero = null;
+
+    function tdRule(what) {
+      if (ruleIndexInZero != null) theZeroStyleSheet.deleteRule(ruleIndexInZero);
+      ruleIndexInZero = theZeroStyleSheet.insertRule(
+        `td, th { white-space: ${what}; }`
+      );
+    }
+    tdRule("normal");
+
+    function removeHandlerFactory(thingt) {
+      return (elem) => {
+        let e = elem.target;
+        console.log(thingt);
+        switch (thingt) {
+          case "name":
+            e.parentNode.parentNode.remove();
+            break;
+          case "header":
+            let th = e.parentNode;
+            let idx = Array.from(th.parentNode.children).indexOf(th);
+            let trs = Array.from(document.getElementById("trs").children);
+            trs // no `.slice(1)` !!
+              .forEach((tr) => {
+                tr.children[idx].remove();
+              });
+            break;
+        }
+      };
+    }
+
+    function numberFieldEnabler(thing, parent = thing.parentNode) {
+      let numberInput = document.createElement("input");
+      numberInput.type = "number";
+      numberInput.value = thing.value;
+      numberInput.min = 0;
+      numberInput.max = 100;
+      let ourListeners = [
+        numberEventListener(thing),
+        rangeEventListener(numberInput)
+      ];
+      numberInput.addEventListener("input", ourListeners[0]);
+      thing.addEventListener("input", ourListeners[1]);
+      // theListeners[numberInput] = ourListeners[0];
+      theListeners[thing] = ourListeners[1];
+      parent.append(numberInput);
+    }
+
+    function numberFieldDisabler(thing) {
+      thing.setAttribute("value", thing.value);
+      thing.removeEventListener("input", theListeners[thing]);
+      thing.parentNode.children[1].remove();
+    }
+
+    function numberEventListener(range) {
+      return (event) => {
+        let num = event.target;
+        range.value = num.value;
+      };
+    }
+
+    function rangeEventListener(number) {
+      return numberEventListener(number);
+    }
+    var theListeners = {};
+
+    function enableEditor() {
+      tdRule("nowrap");
+      document.getElementById("gibarea").style.display = "block";
+      document.getElementById("enableeditor").style.display = "none";
+      document.getElementById("disableeditor").style.display = "block";
+      document.getElementById("appendrow").style.display = "block";
+      var rest = false;
+      for (var thing of thetextelements()) {
+        let te = thing["e"];
+        var text = te.textContent;
+        te.innerHTML =
+          "<input type=text disabled>" +
+          "<button>" +
+          (thing["t"] == "header" ? "&gt;" : "^") +
+          "</button>" +
+          (rest ? "<button>x</button>" : "");
+        var input = te.children[0];
+        input.value = text;
+        input.disabled = false;
+        input = te.children[1];
+        input.addEventListener("click", addHandlerFactory(thing["t"]));
+        if (!rest) {
+          rest = true;
+          continue;
+        }
+        input = te.children[2];
+        input.addEventListener("click", removeHandlerFactory(thing["t"]));
+      }
+      for (var thing of theRangeElements()) {
+        thing.disabled = false;
+        numberFieldEnabler(thing);
+      }
+    }
+
+    function disableEditor() {
+      tdRule("normal");
+      let enableButton = document.getElementById("enableeditor");
+      enableButton.textContent = "Reënable Editor";
+      enableButton.style.display = "block";
+      document.getElementById("disableeditor").style.display = "none";
+      document.getElementById("appendrow").style.display = "none";
+      for (var thing of thetextelements()) {
+        thing = thing["e"];
+        thing.textContent = thing.children[0].value;
+      }
+      for (var thing of theRangeElements()) {
+        thing.disabled = true;
+        numberFieldDisabler(thing);
+      }
+    }
+
+    function gib() {
+      if (document.getElementById("disableeditor").style.display != "none")
+        disableEditor();
+      let enableButton = document.getElementById("enableeditor");
+      let gibArea = document.getElementById("gibarea");
+      enableButton.textContent = "Click here to edit this table to create your own!";
+      gibArea.style.display = "none";
+      document.getElementById("gibhere").value =
+        '<div id="whole"> \n' +
+        document.getElementById("whole").innerHTML +
+        "\n </div>";
+      gibArea.style.display = "block";
+      enableButton.textContent = "Reënable Editor";
+    }
+  </script>
+</div>
